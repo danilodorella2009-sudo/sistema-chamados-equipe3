@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('Base de conhecimento')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container py-4">
+    <div th:replace="~{fragments/layout :: alertas}"></div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-book"></i> Base de conhecimento</h4>
+        <a sec:authorize="hasAnyRole('TECNICO','ADMINISTRADOR_SUPERVISOR')" th:href="@{/kb/novo}" class="btn btn-primary btn-sm">Novo artigo</a>
+    </div>
+    <form method="get" th:action="@{/kb}" class="mb-3">
+        <div class="input-group">
+            <input name="q" th:value="${q}" class="form-control" placeholder="Buscar por palavra-chave (ex.: senha, token, relatório)">
+            <button class="btn btn-secondary">Buscar</button>
+        </div>
+    </form>
+    <div class="list-group">
+        <a th:each="a : ${artigos}" th:href="@{/kb/{id}(id=${a.id})}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between">
+                <b th:text="'#' + ${a.id} + ' – ' + ${a.titulo}"></b>
+                <span class="badge text-bg-light border" th:if="${a.categoria != null}" th:text="${a.categoria.nome}"></span>
+            </div>
+            <div class="small text-muted" th:text="${a.problema}"></div>
+        </a>
+        <div th:if="${#lists.isEmpty(artigos)}" class="text-muted">Nenhum artigo encontrado.</div>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Horário de atendimento')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container py-4" style="max-width: 900px" th:with="h=${@horarioFuncionamentoService}">
+    <div th:replace="~{fragments/layout :: alertas}"></div>
+    <h4 class="mb-3"><i class="bi bi-clock"></i> Horário de atendimento</h4>
+
+    <div class="card p-4 mb-3 border-top border-4" th:classappend="${h.aberto} ? 'border-success' : 'border-danger'">
+        <div class="row align-items-center">
+            <div class="col-md-4 text-center">
+                <div class="small text-muted" th:text="${h.simulado} ? 'Relógio SIMULADO' : 'Horário real'"></div>
+                <div class="display-5 fw-bold" th:text="${h.agoraFormatado}">14:00</div>
+            </div>
+            <div class="col-md-8">
+                <div class="fs-5 mb-1">
+                    Atendimento
+                    <span th:if="${h.aberto}" class="badge text-bg-success">ABERTO</span>
+                    <span th:unless="${h.aberto}" class="badge text-bg-danger">FECHADO</span>
+                    para novos chamados
+                </div>
+                <div class="text-muted">Funcionamento: das <b th:text="${h.inicio}">07:00</b> às <b th:text="${h.fim}">20:00</b>.
+                    Fora desse horário os solicitantes não conseguem abrir chamados
+                    (os chamados já abertos continuam sendo atendidos normalmente).</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-4 mb-3">
+        <h6><i class="bi bi-sliders"></i> Simular horário (para testes e apresentação)</h6>
+        <p class="small text-muted">O horário simulado vale para <b>todos os usuários</b> e só afeta a regra de abertura de
+            chamados. As datas gravadas nos chamados continuam sendo as reais.</p>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <form th:each="hora : ${ {'06:59', '07:00', '12:00', '19:59', '20:00', '21:00'} }"
+                  th:action="@{/admin/horario/simular}" method="post">
+                <input type="hidden" name="hora" th:value="${hora}">
+                <button class="btn btn-outline-dark" th:text="${hora}">12:00</button>
+            </form>
+        </div>
+        <form th:action="@{/admin/horario/simular}" method="post" class="d-flex gap-2 mb-3" style="max-width: 360px">
+            <input type="time" name="hora" class="form-control" required>
+            <button class="btn btn-dark text-nowrap">Simular este horário</button>
+        </form>
+        <form th:action="@{/admin/horario/real}" method="post" th:if="${h.simulado}">
+            <button class="btn btn-success"><i class="bi bi-arrow-counterclockwise"></i> Voltar ao horário real</button>
+        </form>
+    </div>
+
+    <div class="card p-4">
+        <h6><i class="bi bi-easel"></i> Roteiro de teste na apresentação</h6>
+        <ol class="small mb-0">
+            <li>Como supervisor, clique em <b>21:00</b> → o status muda para <b>FECHADO</b>.</li>
+            <li>Saia e entre como solicitante (ex.: <code>joao@alfavarejo.com.br</code>) → em <i>Abrir chamado</i> aparece o aviso e o formulário fica bloqueado.</li>
+            <li>Volte como supervisor e clique em <b>07:00</b> (abre exatamente no início) ou <b>19:59</b> → status <b>ABERTO</b>, o solicitante consegue abrir.</li>
+            <li>Teste os limites: <b>06:59</b> e <b>20:00</b> = fechado; <b>07:00</b> e <b>19:59</b> = aberto.</li>
+            <li>No final, clique em <b>Voltar ao horário real</b>.</li>
+        </ol>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

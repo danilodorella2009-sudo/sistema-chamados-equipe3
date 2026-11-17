@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Editar chamado #' + ${c.id})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container py-4" style="max-width: 900px">
+    <div th:replace="~{fragments/layout :: alertas}"></div>
+    <a th:href="@{/chamados/{id}(id=${c.id})}" class="small">&larr; Voltar ao chamado</a>
+    <div class="card p-4 mt-2">
+        <h4>Editar chamado #<span th:text="${c.id}"></span></h4>
+        <div class="alert alert-secondary small py-2">
+            <i class="bi bi-clock-history"></i>
+            A edição fica registrada no histórico do chamado com <b>data, hora, quem editou</b> e o texto anterior.
+        </div>
+        <form th:action="@{/chamados/{id}/editar(id=${c.id})}" method="post">
+            <div class="mb-3">
+                <label class="form-label">Título *</label>
+                <input name="titulo" th:value="${c.titulo}" class="form-control" maxlength="150" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Descrição *</label>
+                <textarea name="descricao" rows="8" class="form-control" required th:text="${c.descricao}"></textarea>
+            </div>
+            <button class="btn btn-primary">Salvar alterações</button>
+            <a th:href="@{/chamados/{id}(id=${c.id})}" class="btn btn-link">Cancelar</a>
+        </form>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

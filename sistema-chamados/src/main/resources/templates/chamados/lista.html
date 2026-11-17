@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head(${titulo})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container-fluid py-4 px-4">
+    <div th:replace="~{fragments/layout :: alertas}"></div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0" th:text="${titulo}">Chamados</h4>
+            <div class="small text-muted" th:if="${paginaAlertas}">
+                Chamados pendentes que já consumiram <b th:text="${@slaAlertaService.percentualAlerta} + '%'">75%</b>
+                do prazo (amarelo) ou que já venceram (vermelho), do mais urgente para o menos urgente.
+            </div>
+            <div class="small text-muted" th:if="${grupoFila != null && usuarioLogado.grupo != null && grupoFila != usuarioLogado.grupo.sigla}">
+                Fila de nível abaixo do seu: ao assumir um chamado daqui, ele sobe para o
+                <b th:text="${usuarioLogado.grupo.sigla}">N3</b>.
+            </div>
+        </div>
+        <a sec:authorize="hasRole('SOLICITANTE')" th:href="@{/chamados/novo}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Abrir chamado</a>
+        <!-- Alterna a fila entre níveis: técnico vê o próprio nível e os de baixo; supervisor vê todos -->
+        <div th:if="${grupoFila != null && grupos.size() > 1}" class="btn-group">
+            <a th:each="g : ${grupos}" th:href="@{/chamados/fila(grupo=${g.sigla})}" th:text="${g.sigla}"
+               th:classappend="${g.sigla == grupoFila} ? 'btn-dark' : 'btn-outline-dark'" class="btn btn-sm"></a>
+        </div>
+    </div>
+
+    <form th:if="${filtros}" class="row g-2 mb-3" method="get" th:action="@{/chamados/todos}">
+        <div class="col-auto">
+            <select name="status" class="form-select form-select-sm">
+                <option value="">Status: todos</option>
+                <option th:each="s : ${statusList}" th:value="${s}" th:text="${s.descricao}"
+                        th:selected="${param.status != null && param.status[0] == s.name()}"></option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select name="prioridade" class="form-select form-select-sm">
+                <option value="">Prioridade: todas</option>
+                <option th:each="p : ${prioridades}" th:value="${p}" th:text="${p.descricao}"
+                        th:selected="${param.prioridade != null && param.prioridade[0] == p.name()}"></option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select name="grupo" class="form-select form-select-sm">
+                <option value="">Nível: todos</option>
+                <option th:each="g : ${grupos}" th:value="${g.sigla}" th:text="${g.sigla}"
+                        th:selected="${param.grupo != null && param.grupo[0] == g.sigla}"></option>
+            </select>
+        </div>
+        <div class="col-auto"><button class="btn btn-sm btn-secondary">Filtrar</button></div>
+    </form>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th>#</th><th>Título</th><th>Tipo</th><th>Categoria</th><th>Prioridade</th>
+                    <th>Status</th><th>Nível</th><th>Responsável</th><th>Solicitante</th><th>Abertura</th><th>Prazo SLA</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:if="${#lists.isEmpty(chamados)}"><td colspan="11" class="text-center text-muted py-4">Nenhum chamado.</td></tr>
+                <tr th:each="c : ${chamados}">
+                    <td><a th:href="@{/chamados/{id}(id=${c.id})}" th:text="${c.id}">1</a></td>
+                    <td><a th:href="@{/chamados/{id}(id=${c.id})}" th:text="${c.titulo}" class="text-decoration-none">Título</a></td>
+                    <td th:text="${c.tipo.descricao}"></td>
+                    <td th:text="${c.categoria.nome}"></td>
+                    <td><span class="badge" th:classappend="'text-bg-' + ${c.prioridade.cor}" th:text="${c.prioridade.descricao}"></span></td>
+                    <td><span class="badge" th:classappend="'text-bg-' + ${c.status.cor}" th:text="${c.status.descricao}"></span>
+                        <span th:if="${c.suporteRemoto && !c.remotoAutorizado && c.status.name() == 'EM_ATENDIMENTO'}"
+                              class="badge text-bg-info"><i class="bi bi-display"></i> Remoto: aguardando autorização</span></td>
+                    <td><span class="badge text-bg-light border" th:text="${c.grupoAtual.sigla}"></span></td>
+                    <td>
+                        <span th:if="${c.tecnicoResponsavel != null}" th:text="${c.tecnicoResponsavel.nome}"></span>
+                        <span th:if="${c.tecnicoResponsavel == null && c.tecnicoDesignado != null}" class="text-primary"
+                              th:text="'→ ' + ${c.tecnicoDesignado.nome} + ' (aguardando aceite)'"></span>
+                        <span th:if="${c.tecnicoResponsavel == null && c.tecnicoDesignado == null}">—</span>
+                    </td>
+                    <td th:text="${c.solicitante.nome + ' (' + c.solicitante.empresa + ')'}"></td>
+                    <td th:text="${#temporals.format(c.dataAbertura, 'dd/MM HH:mm')}"></td>
+                    <td th:with="n=${@slaAlertaService.nivel(c)}">
+                        <span th:text="${#temporals.format(c.prazoSla, 'dd/MM HH:mm')}"></span>
+                        <span th:if="${n != null && n.name() == 'VENCIDO'}" class="badge text-bg-danger"
+                              th:text="${@slaAlertaService.textoRestante(c)}"></span>
+                        <span th:if="${n != null && n.name() == 'PROXIMO'}" class="badge text-bg-warning"
+                              th:text="'⚠ ' + ${@slaAlertaService.textoRestante(c)}"></span>
+                        <span th:if="${n == null && c.slaVencido}" class="badge text-bg-light border">fora do SLA</span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Artigo da base')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container py-4" style="max-width: 900px">
+    <div class="card p-4">
+        <h4 th:text="${form.id == null} ? 'Novo artigo' : 'Editar artigo #' + ${form.id}"></h4>
+        <form th:action="@{/kb}" th:object="${form}" method="post">
+            <input type="hidden" th:field="*{id}">
+            <div class="mb-3">
+                <label class="form-label">Título *</label>
+                <input th:field="*{titulo}" class="form-control" th:classappend="${#fields.hasErrors('titulo')} ? 'is-invalid'">
+                <div class="invalid-feedback" th:errors="*{titulo}"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Categoria</label>
+                <select th:field="*{categoriaId}" class="form-select">
+                    <option value="">—</option>
+                    <option th:each="cat : ${categorias}" th:value="${cat.id}" th:text="${cat.nome}"></option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Problema / dúvida *</label>
+                <textarea th:field="*{problema}" rows="3" class="form-control" th:classappend="${#fields.hasErrors('problema')} ? 'is-invalid'"></textarea>
+                <div class="invalid-feedback" th:errors="*{problema}"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Solução / procedimento *</label>
+                <textarea th:field="*{solucao}" rows="8" class="form-control" th:classappend="${#fields.hasErrors('solucao')} ? 'is-invalid'"></textarea>
+                <div class="invalid-feedback" th:errors="*{solucao}"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Palavras-chave</label>
+                <input th:field="*{palavrasChave}" class="form-control" placeholder="separadas por vírgula">
+            </div>
+            <button class="btn btn-primary">Salvar</button>
+            <a th:href="@{/kb}" class="btn btn-link">Cancelar</a>
+        </form>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head(${a.titulo})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container py-4" style="max-width: 900px">
+    <div th:replace="~{fragments/layout :: alertas}"></div>
+    <a th:href="@{/kb}" class="small">&larr; Base de conhecimento</a>
+    <div class="card p-4 mt-2">
+        <div class="d-flex justify-content-between">
+            <h4 th:text="'#' + ${a.id} + ' – ' + ${a.titulo}"></h4>
+            <a sec:authorize="hasAnyRole('TECNICO','ADMINISTRADOR_SUPERVISOR')" th:href="@{/kb/{id}/editar(id=${a.id})}"
+               class="btn btn-outline-secondary btn-sm align-self-start">Editar</a>
+        </div>
+        <div class="small text-muted mb-3">
+            <span th:if="${a.categoria != null}" th:text="${a.categoria.nome}"></span> ·
+            <span th:if="${a.autor != null}" th:text="'Autor: ' + ${a.autor.nome}"></span> ·
+            <span th:text="'Criado em ' + ${#temporals.format(a.dataCriacao, 'dd/MM/yyyy')}"></span>
+            <span th:if="${a.dataAtualizacao != null}" th:text="' · Atualizado em ' + ${#temporals.format(a.dataAtualizacao, 'dd/MM/yyyy')}"></span>
+        </div>
+        <h6>Problema / dúvida</h6>
+        <p class="pre" th:text="${a.problema}"></p>
+        <h6>Solução / procedimento</h6>
+        <p class="pre" th:text="${a.solucao}"></p>
+        <div class="small text-muted" th:if="${a.palavrasChave != null}" th:text="'Palavras-chave: ' + ${a.palavrasChave}"></div>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('Chamado #' + ${c.id})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container-fluid py-4 px-4">
+    <div th:replace="~{fragments/layout :: alertas}"></div>
+
+    <!-- Prazo (SLA): barra de consumo + alerta quando está perto de acabar -->
+    <th:block th:with="n=${@slaAlertaService.nivel(c)}, pct=${@slaAlertaService.percentualConsumido(c)}">
+    <div class="card p-3 mb-3" th:if="${n != null}"
+         th:classappend="${n.name() == 'VENCIDO'} ? 'border border-danger' : (${n.name() == 'PROXIMO'} ? 'border border-warning' : '')">
+        <div class="d-flex justify-content-between small mb-1">
+            <span>
+                <i class="bi bi-alarm"></i> <b>Prazo do SLA:</b>
+                <span th:text="${#temporals.format(c.prazoSla, 'dd/MM/yyyy HH:mm')}"></span>
+                <span th:if="${n.name() == 'PROXIMO'}" class="badge text-bg-warning ms-1">⚠ Prazo próximo de acabar</span>
+                <span th:if="${n.name() == 'VENCIDO'}" class="badge text-bg-danger ms-1">Prazo vencido</span>
+            </span>
+            <b th:text="${@slaAlertaService.textoRestante(c)}"
+               th:classappend="${n.name() == 'VENCIDO'} ? 'text-danger' : (${n.name() == 'PROXIMO'} ? 'text-warning-emphasis' : 'text-success')"></b>
+        </div>
+        <div class="progress" style="height: 10px">
+            <div class="progress-bar"
+                 th:classappend="${n.name() == 'VENCIDO'} ? 'bg-danger' : (${n.name() == 'PROXIMO'} ? 'bg-warning' : 'bg-success')"
+                 th:style="'width:' + ${pct > 100 ? 100 : pct} + '%'"></div>
+        </div>
+        <div class="small text-muted mt-1" th:text="${pct} + '% do prazo consumido'"></div>
+    </div>
+    </th:block>
+
+    <!-- Transferência direcionada a um técnico específico, aguardando aceite -->
+    <div class="alert alert-primary" th:if="${c.tecnicoDesignado != null}">
+        <h6 class="alert-heading mb-1"><i class="bi bi-person-down"></i>
+            Transferido para <span th:text="${c.tecnicoDesignado.nome}">Carla</span>
+            (<span th:text="${c.grupoAtual.sigla}">N2</span>) – aguardando aceite</h6>
+        <div class="small" th:unless="${c.tecnicoDesignado.id == usuarioLogado.id}">
+            Somente <b th:text="${c.tecnicoDesignado.nome}"></b> pode aceitar este chamado
+            <span sec:authorize="hasRole('ADMINISTRADOR_SUPERVISOR')">(o supervisor pode redistribuir)</span>.
+        </div>
+        <th:block th:if="${c.tecnicoDesignado.id == usuarioLogado.id}">
+            <div class="small mb-2">Este chamado foi transferido <b>para você</b>. Aceite para começar o atendimento ou recuse com justificativa.</div>
+            <div class="d-flex flex-wrap gap-2">
+                <form th:action="@{/chamados/{id}/assumir(id=${c.id})}" method="post">
+                    <button class="btn btn-primary"><i class="bi bi-check-circle"></i> Aceitar chamado</button>
+                </form>
+                <button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#recusarDesignacao">
+                    <i class="bi bi-x-circle"></i> Recusar</button>
+            </div>
+            <div class="collapse mt-2" id="recusarDesignacao">
+                <form th:action="@{/chamados/{id}/recusar-designacao(id=${c.id})}" method="post" class="d-flex gap-2">
+                    <input name="justificativa" class="form-control" required minlength="10"
+                           placeholder="Justificativa (mín. 10 caracteres), ex.: estou de férias / não é minha especialidade">
+                    <button class="btn btn-danger text-nowrap">Confirmar recusa</button>
+                </form>
+            </div>
+        </th:block>
+    </div>
+
+    <!-- Técnico aguardando retorno do solicitante -->
+    <div class="alert alert-info" th:if="${dono && c.status.name() == 'AGUARDANDO_USUARIO'}">
+        <i class="bi bi-chat-dots"></i> <b>O técnico está aguardando o seu retorno.</b>
+        Responda com um comentário no histórico abaixo: o chamado volta automaticamente para atendimento.
+    </div>
+
+    <!-- Pedido de suporte remoto aguardando a resposta do solicitante -->
+    <div class="alert alert-info border-info shadow-sm"
+         th:if="${dono && c.suporteRemoto && !c.remotoAutorizado && c.status.name() == 'EM_ATENDIMENTO'}">
+        <h5 class="alert-heading"><i class="bi bi-display"></i> Pedido de atendimento via suporte remoto</h5>
+        <p class="mb-2">
+            <b th:text="${c.tecnicoResponsavel != null ? c.tecnicoResponsavel.nome : 'O técnico'}">Técnico</b>
+            pediu acesso remoto à sua estação usando <b th:text="${c.remotoFerramenta}">AnyDesk</b>.
+            Se você aceitar, ele poderá ver e operar seu computador durante o atendimento.
+            Sua resposta fica registrada no histórico do chamado.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+            <form th:action="@{/chamados/{id}/remoto/autorizar(id=${c.id})}" method="post">
+                <button class="btn btn-success"><i class="bi bi-check-circle"></i> Aceitar suporte remoto</button>
+            </form>
+            <button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#recusarRemoto">
+                <i class="bi bi-x-circle"></i> Recusar</button>
+        </div>
+        <div class="collapse mt-2" id="recusarRemoto">
+            <form th:action="@{/chamados/{id}/remoto/recusar(id=${c.id})}" method="post" class="d-flex gap-2">
+                <input name="motivo" class="form-control" placeholder="Motivo (opcional), ex.: prefiro atendimento por telefone">
+                <button class="btn btn-danger text-nowrap">Confirmar recusa</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <h4 class="mb-0">#<span th:text="${c.id}"></span> – <span th:text="${c.titulo}"></span></h4>
+        <span class="badge fs-6" th:classappend="'text-bg-' + ${c.status.cor}" th:text="${c.status.descricao}"></span>
+        <span class="badge fs-6" th:classappend="'text-bg-' + ${c.prioridade.cor}" th:text="'Prioridade ' + ${c.prioridade.descricao}"></span>
+        <span class="badge fs-6 text-bg-light border" th:text="'Nível ' + ${c.grupoAtual.sigla}"></span>
+        <span th:if="${c.slaVencido}" class="badge fs-6 text-bg-danger">SLA vencido</span>
+        <span th:if="${c.suporteRemoto}" class="badge fs-6 text-bg-info">Suporte remoto</span>
+        <a th:if="${podeEditar}" th:href="@{/chamados/{id}/editar(id=${c.id})}" class="btn btn-sm btn-outline-primary ms-auto">
+            <i class="bi bi-pencil"></i> Editar chamado</a>
+    </div>
+    <div class="small text-muted mb-3" th:if="${ultimaEdicao != null}">
+        <i class="bi bi-pencil-square"></i>
+        Última edição em <b th:text="${#temporals.format(ultimaEdicao.dataHora, 'dd/MM/yyyy HH:mm:ss')}"></b>
+        por <b th:text="${ultimaEdicao.usuario != null ? ultimaEdicao.usuario.nome : 'Sistema'}"></b>
+        (detalhes no histórico)
+    </div>
+
+    <div class="row g-4">
+        <!-- ===================== COLUNA PRINCIPAL ===================== -->
+        <div class="col-lg-8">
+            <div class="card p-3 mb-3">
+                <div class="row small">
+                    <div class="col-md-4 mb-2"><b>Tipo:</b> <span th:text="${c.tipo.descricao}"></span></div>
+                    <div class="col-md-4 mb-2"><b>Categoria:</b> <span th:text="${c.categoria.nome}"></span></div>
+                    <div class="col-md-4 mb-2"><b>Impacto x Urgência:</b>
+                        <span th:text="${c.impacto.descricao + ' x ' + c.urgencia.descricao}"></span></div>
+                    <div class="col-md-4 mb-2"><b>Solicitante:</b>
+                        <span th:text="${c.solicitante.nome + ' (' + c.solicitante.empresa + ')'}"></span></div>
+                    <div class="col-md-4 mb-2"><b>Responsável:</b>
+                        <span th:text="${c.tecnicoResponsavel != null ? c.tecnicoResponsavel.nome : 'Na fila do ' + c.grupoAtual.sigla}"></span></div>
+                    <div class="col-md-4 mb-2"><b>Grupo:</b> <span th:text="${c.grupoAtual.nome}"></span></div>
+                    <div class="col-md-4 mb-2"><b>Abertura:</b> <span th:text="${#temporals.format(c.dataAbertura, 'dd/MM/yyyy HH:mm')}"></span></div>
+                    <div class="col-md-4 mb-2"><b>Prazo SLA:</b> <span th:text="${#temporals.format(c.prazoSla, 'dd/MM/yyyy HH:mm')}"></span></div>
+                    <div class="col-md-4 mb-2" th:if="${c.dataSolucao != null}"><b>Solução:</b>
+                        <span th:text="${#temporals.format(c.dataSolucao, 'dd/MM/yyyy HH:mm')}"></span></div>
+                    <div class="col-md-4 mb-2" th:if="${c.dataFechamento != null}"><b>Fechamento:</b>
+                        <span th:text="${#temporals.format(c.dataFechamento, 'dd/MM/yyyy HH:mm')}"></span></div>
+                </div>
+                <hr>
+                <h6>Descrição</h6>
+                <p class="pre mb-0" th:text="${c.descricao}"></p>
+            </div>
+
+            <div class="card p-3 mb-3 border-start border-success border-4" th:if="${c.solucao != null}">
+                <h6 class="text-success"><i class="bi bi-check2-circle"></i> Solução</h6>
+                <p class="pre" th:text="${c.solucao}"></p>
+                <div th:if="${c.referenciaVersao != null}" class="small"><b>Versão / Release / Commit / Hotfix:</b>
+                    <code th:text="${c.referenciaVersao}"></code></div>
+                <div th:if="${c.artigoUtilizado != null}" class="small"><b>Base de conhecimento:</b>
+                    <a th:href="@{/kb/{id}(id=${c.artigoUtilizado.id})}" th:text="'#' + ${c.artigoUtilizado.id} + ' – ' + ${c.artigoUtilizado.titulo}"></a></div>
+            </div>
+
+            <div class="card p-3 mb-3 border-start border-info border-4" th:if="${c.suporteRemoto}">
+                <h6 class="text-info"><i class="bi bi-display"></i> Atendimento via suporte remoto</h6>
+                <div class="small mb-2">
+                    <b>Ferramenta:</b> <span th:text="${c.remotoFerramenta}"></span> ·
+                    <b>Autorização:</b>
+                    <span th:if="${c.remotoAutorizado}" class="text-success"
+                          th:text="'Autorizado pelo solicitante em ' + ${#temporals.format(c.remotoAutorizadoEm, 'dd/MM/yyyy HH:mm')}"></span>
+                    <span th:unless="${c.remotoAutorizado}" class="text-danger">Aguardando autorização do solicitante</span>
+                </div>
+                <div th:if="${c.remotoDiagnostico != null}">
+                    <b class="small">Log de diagnóstico:</b>
+                    <pre class="bg-light p-2 small mb-0" th:text="${c.remotoDiagnostico}"></pre>
+                </div>
+            </div>
+
+            <div class="card p-3 mb-3">
+                <h6><i class="bi bi-clock-history"></i> Histórico de tramitações</h6>
+                <div class="timeline mt-2">
+                    <div class="item" th:each="h : ${c.historico}" th:classappend="${h.acao.name()}">
+                        <div class="small text-muted">
+                            <span th:text="${#temporals.format(h.dataHora, 'dd/MM/yyyy HH:mm:ss')}"></span> ·
+                            <b th:text="${h.usuario != null ? h.usuario.nome : 'Sistema'}"></b> ·
+                            <span class="badge text-bg-secondary" th:text="${h.acao.descricao}"></span>
+                            <span th:if="${h.grupoOrigem != null}" class="badge"
+                                  th:classappend="${h.acao.name() == 'RETRANSFERENCIA'} ? 'text-bg-secondary' : 'text-bg-warning'"
+                                  th:text="${h.grupoOrigem.sigla + ' → ' + h.grupoDestino.sigla}"></span>
+                            <span th:if="${h.statusNovo != null}"
+                                  th:text="${(h.statusAnterior != null ? h.statusAnterior.descricao + ' → ' : '') + h.statusNovo.descricao}"></span>
+                        </div>
+                        <div class="pre" th:text="${h.descricao}"></div>
+                    </div>
+                </div>
+                <form th:unless="${c.status.isFinal()}" th:action="@{/chamados/{id}/comentar(id=${c.id})}" method="post" class="mt-2">
+                    <div class="input-group">
+                        <input name="texto" class="form-control" placeholder="Adicionar comentário / informação..." required>
+                        <button class="btn btn-outline-secondary">Comentar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ===================== AÇÕES ===================== -->
+        <div class="col-lg-4">
+
+            <!-- Solicitante: validação da solução -->
+            <div class="card p-3 mb-3 border border-success" th:if="${dono && c.status.name() == 'SOLUCIONADO'}">
+                <h6>Validação da solução</h6>
+                <p class="small">O problema foi resolvido? Sua confirmação encerra o chamado.</p>
+                <form th:action="@{/chamados/{id}/validar(id=${c.id})}" method="post">
+                    <textarea name="comentario" class="form-control mb-2" rows="2"
+                              placeholder="Comentário (obrigatório para reprovar)"></textarea>
+                    <div class="d-flex gap-2">
+                        <button name="aprovado" value="true" class="btn btn-success flex-fill">Aprovar e encerrar</button>
+                        <button name="aprovado" value="false" class="btn btn-outline-danger flex-fill">Reprovar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Equipe do nível atual -->
+            <!-- Assumir: mesmo nível ou nível superior (N2 assume do N1; N3 assume do N1 e do N2) -->
+            <div class="card p-3 mb-3" th:if="${podeAssumir && (c.tecnicoDesignado == null || c.tecnicoDesignado.id != usuarioLogado.id)}"
+                 th:classappend="${puxarDeNivelInferior} ? 'border border-primary' : ''">
+                <div th:if="${puxarDeNivelInferior}" class="small mb-2">
+                    <i class="bi bi-arrow-up-circle text-primary"></i>
+                    Este chamado está no <b th:text="${c.grupoAtual.sigla}">N1</b>. Como você é do
+                    <b th:text="${usuarioLogado.grupo.sigla}">N3</b>, ao assumir ele sobe para o seu nível
+                    <span th:if="${c.tecnicoResponsavel != null}"
+                          th:text="'(hoje está com ' + ${c.tecnicoResponsavel.nome} + ')'"></span>.
+                </div>
+                <form th:action="@{/chamados/{id}/assumir(id=${c.id})}" method="post">
+                    <button class="btn btn-primary w-100">
+                        <i class="bi bi-person-check"></i>
+                        <span th:text="${puxarDeNivelInferior}
+                              ? 'Assumir (puxar do ' + ${c.grupoAtual.sigla} + ' para o ' + ${usuarioLogado.grupo.sigla} + ')'
+                              : 'Assumir chamado'">Assumir chamado</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Atualizar status manualmente (técnicos do nível atual e supervisor) -->
+            <div class="card p-3 mb-3 border border-dark" th:unless="${#lists.isEmpty(statusPermitidos)}">
+                <h6><i class="bi bi-flag"></i> Atualizar status</h6>
+                <div class="small text-muted mb-2">Status atual:
+                    <span class="badge" th:classappend="'text-bg-' + ${c.status.cor}" th:text="${c.status.descricao}"></span></div>
+                <form th:action="@{/chamados/{id}/status(id=${c.id})}" method="post">
+                    <select name="novoStatus" id="novoStatus" class="form-select mb-2" required>
+                        <option value="">Mudar para...</option>
+                        <option th:each="s : ${statusPermitidos}" th:value="${s}"
+                                th:text="${(s.name() == 'EM_ATENDIMENTO' && (c.status.name() == 'SOLUCIONADO' || c.status.isFinal())) ? 'Reabrir chamado (Em Atendimento)'
+                                         : (s.name() == 'ABERTO' && c.status.name() == 'CANCELADO') ? 'Reativar chamado (Aberto)' : s.rotuloAcao}"></option>
+                    </select>
+                    <textarea name="justificativa" id="justificativaStatus" class="form-control mb-2" rows="2" required
+                              placeholder="Justificativa (obrigatória)"></textarea>
+                    <input name="referenciaVersao" id="refStatus" class="form-control mb-2 d-none"
+                           th:placeholder="${c.grupoAtual.n3} ? 'Release / Commit / Hotfix (obrigatório no N3)' : 'Release / Commit / Hotfix (opcional)'">
+                    <button class="btn btn-dark w-100">Atualizar status</button>
+                </form>
+            </div>
+
+            <!-- Por que não posso assumir (ex.: já está com outro técnico) -->
+            <div class="card p-3 mb-3 bg-light small"
+                 th:if="${!podeAssumir && motivoNaoAssumir != null && usuarioLogado.tecnico
+                          && (c.status.name() == 'ABERTO' || c.status.name() == 'EM_ATENDIMENTO' || c.status.name() == 'AGUARDANDO_USUARIO')
+                          && (c.tecnicoResponsavel == null || c.tecnicoResponsavel.id != usuarioLogado.id)
+                          && (c.tecnicoDesignado == null || c.tecnicoDesignado.id != usuarioLogado.id)}">
+                <span><i class="bi bi-lock"></i> <span th:text="${motivoNaoAssumir}"></span></span>
+            </div>
+
+            <th:block th:if="${equipeDoGrupo && (c.status.name() == 'ABERTO' || c.status.name() == 'EM_ATENDIMENTO' || c.status.name() == 'AGUARDANDO_USUARIO')}">
+
+                <!-- Retransferir: devolve para o nível de onde o chamado veio -->
+                <div class="card p-3 mb-3 border border-secondary" th:if="${grupoOrigem != null}">
+                    <h6><i class="bi bi-arrow-return-left"></i> Retransferir chamado</h6>
+                    <p class="small mb-2">
+                        Este chamado veio do <b th:text="${grupoOrigem.sigla}">N1</b>
+                        <span th:if="${tecnicosPorNivel[grupoOrigem.sigla] != null}"
+                              th:text="'(' + ${tecnicosPorNivel[grupoOrigem.sigla]} + ')'"></span>.
+                        Se ele não é deste nível, devolva com a justificativa.
+                    </p>
+                    <button class="btn btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#formRetransferir">
+                        <i class="bi bi-arrow-return-left"></i>
+                        <span th:text="'Retransferir para ' + ${grupoOrigem.sigla}">Retransferir</span>
+                    </button>
+                    <div class="collapse mt-2" id="formRetransferir">
+                        <form th:action="@{/chamados/{id}/retransferir(id=${c.id})}" method="post">
+                            <textarea name="justificativa" class="form-control mb-2" rows="3" required minlength="10"
+                                      placeholder="Justificativa obrigatória (mín. 10 caracteres): por que o chamado não é deste nível / o que falta ser feito antes"></textarea>
+                            <button class="btn btn-secondary w-100">Confirmar retransferência</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <h6><i class="bi bi-arrow-up-right-circle"></i> Escalonar / transferir</h6>
+                    <form th:action="@{/chamados/{id}/transferir(id=${c.id})}" method="post">
+                        <label class="form-label small mb-1">Nível de destino</label>
+                        <select name="grupoDestino" id="grupoDestino" class="form-select mb-2" required>
+                            <option th:each="g : ${grupos}" th:value="${g.sigla}"
+                                    th:selected="${g.id != c.grupoAtual.id && g.nivel == c.grupoAtual.nivel + 1}"
+                                    th:text="${g.sigla + ' – ' + g.nome + (g.id == c.grupoAtual.id ? ' (mesmo nível)' : '')}"></option>
+                        </select>
+                        <label class="form-label small mb-1">Para quem</label>
+                        <select name="tecnicoDestinoId" id="tecnicoDestino" class="form-select mb-1">
+                            <option value="">Qualquer técnico do nível (vai para a fila)</option>
+                            <option th:each="t : ${tecnicos}" th:if="${t.grupo != null && t.id != usuarioLogado.id}"
+                                    th:value="${t.id}" th:attr="data-grupo=${t.grupo.sigla}"
+                                    th:text="${t.nome + ' (' + t.grupo.sigla + ')'}"></option>
+                        </select>
+                        <div class="small text-muted mb-2">Se escolher um técnico, só ele poderá aceitar o chamado.</div>
+                        <ul class="small text-muted ps-3 mb-2">
+                            <li th:each="g : ${grupos}">
+                                <b th:text="${g.sigla}">N1</b>:
+                                <span th:text="${tecnicosPorNivel[g.sigla] != null ? tecnicosPorNivel[g.sigla] : 'sem técnicos'}"></span>
+                                <span th:if="${g.id == c.grupoAtual.id}" class="badge text-bg-light border">nível atual</span>
+                            </li>
+                        </ul>
+                        <textarea name="justificativa" class="form-control mb-2" rows="2" required
+                                  placeholder="Justificativa (obrigatória): o que já foi feito e por que precisa de outro nível"></textarea>
+                        <button class="btn btn-warning w-100">Transferir</button>
+                    </form>
+                </div>
+
+                <div class="card p-3 mb-3">
+                    <h6><i class="bi bi-tags"></i> Reclassificar</h6>
+                    <form th:action="@{/chamados/{id}/reclassificar(id=${c.id})}" method="post" class="small">
+                        <select name="tipo" class="form-select form-select-sm mb-1">
+                            <option th:each="t : ${tipos}" th:value="${t}" th:text="${t.descricao}" th:selected="${t == c.tipo}"></option>
+                        </select>
+                        <select name="categoriaId" class="form-select form-select-sm mb-1">
+                            <option th:each="cat : ${categorias}" th:value="${cat.id}" th:text="${cat.nome}"
+                                    th:selected="${cat.id == c.categoria.id}"></option>
+                        </select>
+                        <div class="d-flex gap-1 mb-2">
+                            <select name="impacto" class="form-select form-select-sm">
+                                <option th:each="i : ${impactos}" th:value="${i}" th:text="'Imp. ' + ${i.descricao}" th:selected="${i == c.impacto}"></option>
+                            </select>
+                            <select name="urgencia" class="form-select form-select-sm">
+                                <option th:each="u : ${urgencias}" th:value="${u}" th:text="'Urg. ' + ${u.descricao}" th:selected="${u == c.urgencia}"></option>
+                            </select>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary w-100">Salvar classificação</button>
+                    </form>
+                </div>
+            </th:block>
+
+            <!-- Técnico responsável: suporte remoto e solução -->
+            <th:block th:if="${responsavel && c.status.name() == 'EM_ATENDIMENTO'}">
+                <div class="card p-3 mb-3">
+                    <h6><i class="bi bi-display"></i> Suporte remoto</h6>
+                    <form th:unless="${c.suporteRemoto}" th:action="@{/chamados/{id}/remoto/solicitar(id=${c.id})}" method="post">
+                        <div class="input-group input-group-sm">
+                            <input name="ferramenta" class="form-control" value="AnyDesk">
+                            <button class="btn btn-outline-info">Solicitar acesso</button>
+                        </div>
+                    </form>
+                    <div th:if="${c.suporteRemoto && !c.remotoAutorizado}" class="small text-danger">
+                        Aguardando o solicitante autorizar o acesso no chamado.</div>
+                    <form th:if="${c.remotoAutorizado}" th:action="@{/chamados/{id}/remoto/diagnostico(id=${c.id})}" method="post">
+                        <textarea name="diagnostico" class="form-control form-control-sm mb-2" rows="3" required
+                                  placeholder="Diagnóstico / ações realizadas na sessão"></textarea>
+                        <button class="btn btn-sm btn-info w-100">Registrar diagnóstico</button>
+                    </form>
+                </div>
+
+                <div class="card p-3 mb-3 border border-success">
+                    <h6><i class="bi bi-check2-circle"></i> Registrar solução</h6>
+                    <form th:action="@{/chamados/{id}/solucionar(id=${c.id})}" method="post">
+                        <textarea name="solucao" class="form-control mb-2" rows="3" required
+                                  placeholder="Causa e solução aplicada"></textarea>
+                        <label class="form-label small mb-1">
+                            Referência de Versão / Release / Commit / Hotfix
+                            <span th:if="${c.grupoAtual.n3}" class="text-danger">* obrigatório no N3</span>
+                        </label>
+                        <input name="referenciaVersao" class="form-control mb-2" th:required="${c.grupoAtual.n3}"
+                               placeholder="ex.: Hotfix v3.4.1 - commit 8f2c1e9">
+                        <select name="artigoId" class="form-select mb-2">
+                            <option value="">Artigo da base utilizado (opcional)</option>
+                            <option th:each="a : ${artigos}" th:value="${a.id}" th:text="'#' + ${a.id} + ' ' + ${a.titulo}"></option>
+                        </select>
+                        <button class="btn btn-success w-100">Marcar como solucionado</button>
+                    </form>
+                </div>
+            </th:block>
+
+            <!-- Supervisor: encerramento -->
+            <div class="card p-3 mb-3" sec:authorize="hasRole('ADMINISTRADOR_SUPERVISOR')" th:if="${c.status.name() == 'SOLUCIONADO'}">
+                <h6>Encerrar (supervisor)</h6>
+                <form th:action="@{/chamados/{id}/encerrar(id=${c.id})}" method="post">
+                    <input name="motivo" class="form-control form-control-sm mb-2" placeholder="Motivo (ex.: sem retorno do usuário)">
+                    <button class="btn btn-dark btn-sm w-100">Encerrar chamado</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+<script>
+    // Transferência: lista "Para quem" mostra só os técnicos do nível escolhido
+    (function () {
+        const nivel = document.getElementById('grupoDestino');
+        const tec = document.getElementById('tecnicoDestino');
+        if (!nivel || !tec) return;
+        function filtrar() {
+            [...tec.options].forEach(o => {
+                if (!o.value) return;
+                const visivel = o.dataset.grupo === nivel.value;
+                o.hidden = !visivel; o.disabled = !visivel;
+            });
+            if (tec.selectedOptions[0] && tec.selectedOptions[0].disabled) tec.value = '';
+        }
+        nivel.addEventListener('change', filtrar);
+        filtrar();
+    })();
+
+    // "Concluído": a justificativa vira a solução e aparece o campo de release/commit
+    (function () {
+        const sel = document.getElementById('novoStatus');
+        if (!sel) return;
+        const just = document.getElementById('justificativaStatus');
+        const ref = document.getElementById('refStatus');
+        sel.addEventListener('change', function () {
+            const concluir = sel.value === 'SOLUCIONADO';
+            ref.classList.toggle('d-none', !concluir);
+            just.placeholder = concluir ? 'Descreva a solução aplicada (obrigatório)' : 'Justificativa (obrigatória)';
+        });
+    })();
+</script>
+</body>
+</html>

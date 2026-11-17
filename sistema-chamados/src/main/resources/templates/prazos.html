@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Teste de prazos')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container-fluid py-4 px-4" th:with="sla=${@slaAlertaService}">
+    <div th:replace="~{fragments/layout :: alertas}"></div>
+    <h4 class="mb-1"><i class="bi bi-alarm"></i> Teste de alertas de prazo (SLA)</h4>
+    <p class="text-muted small">
+        O alerta aparece quando o chamado já consumiu <b th:text="${sla.percentualAlerta} + '%'">75%</b> do prazo
+        e fica vermelho quando vence. Para demonstrar, ajuste o prazo de um chamado pendente abaixo.
+        O ajuste fica registrado no histórico do chamado e pode ser desfeito em <b>Restaurar</b>.
+    </p>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                <tr><th>#</th><th>Chamado</th><th>Prioridade</th><th>Nível</th><th>Prazo atual</th><th>Situação</th><th>Ajustar prazo para teste</th></tr>
+                </thead>
+                <tbody>
+                <tr th:if="${#lists.isEmpty(pendentes)}"><td colspan="7" class="text-center text-muted py-4">Nenhum chamado pendente.</td></tr>
+                <tr th:each="c : ${pendentes}" th:with="n=${sla.nivel(c)}">
+                    <td><a th:href="@{/chamados/{id}(id=${c.id})}" th:text="${c.id}"></a></td>
+                    <td th:text="${c.titulo}"></td>
+                    <td><span class="badge" th:classappend="'text-bg-' + ${c.prioridade.cor}" th:text="${c.prioridade.descricao}"></span></td>
+                    <td th:text="${c.grupoAtual.sigla}"></td>
+                    <td class="small" th:text="${#temporals.format(c.prazoSla, 'dd/MM HH:mm')}"></td>
+                    <td>
+                        <span th:if="${n != null && n.name() == 'VENCIDO'}" class="badge text-bg-danger" th:text="${sla.textoRestante(c)}"></span>
+                        <span th:if="${n != null && n.name() == 'PROXIMO'}" class="badge text-bg-warning" th:text="${sla.textoRestante(c)}"></span>
+                        <span th:if="${n != null && n.name() == 'OK'}" class="badge text-bg-success" th:text="${sla.textoRestante(c)}"></span>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-wrap gap-1">
+                            <form th:each="m : ${ {30, 5, -10} }" th:action="@{/admin/prazos/ajustar}" method="post">
+                                <input type="hidden" name="chamadoId" th:value="${c.id}">
+                                <input type="hidden" name="minutos" th:value="${m}">
+                                <button class="btn btn-sm"
+                                        th:classappend="${m < 0} ? 'btn-outline-danger' : 'btn-outline-warning'"
+                                        th:text="${m < 0} ? 'Vencido há ' + ${-m} + ' min' : 'Vence em ' + ${m} + ' min'"></button>
+                            </form>
+                            <form th:action="@{/admin/prazos/restaurar}" method="post">
+                                <input type="hidden" name="chamadoId" th:value="${c.id}">
+                                <button class="btn btn-sm btn-outline-secondary">Restaurar</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card p-3 mt-3 small">
+        <b><i class="bi bi-easel"></i> Roteiro na apresentação</b>
+        <ol class="mb-0">
+            <li>Escolha um chamado (ex.: #1) e clique em <b>Vence em 30 min</b> → aparece o sino amarelo na barra e o aviso flutuante.</li>
+            <li>Abra o chamado: a barra de prazo mostra o tempo restante.</li>
+            <li>Clique em <b>Vencido há 10 min</b> → o alerta fica vermelho. (Se o chamado estiver no N1, o escalonamento automático o envia ao N2 em até 5 min.)</li>
+            <li>Entre como técnico (ex.: <code>ana.n1@softhouse.com</code>) para mostrar que ele também é avisado.</li>
+            <li>No fim, clique em <b>Restaurar</b>.</li>
+        </ol>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

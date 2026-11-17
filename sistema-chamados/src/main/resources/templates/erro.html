@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Aviso')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container py-4">
+    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> <span th:text="${mensagem}">Mensagem</span></div>
+    <a th:href="@{/}" class="btn btn-secondary">Voltar ao início</a>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

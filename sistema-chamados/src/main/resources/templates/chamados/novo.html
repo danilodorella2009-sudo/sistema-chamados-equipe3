@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Abrir chamado')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div class="container py-4">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card p-4">
+                <h4 class="mb-3">Abrir chamado</h4>
+                <div th:replace="~{fragments/layout :: alertas}"></div>
+                <div class="alert alert-danger" th:unless="${@horarioFuncionamentoService.aberto}">
+                    <h6 class="alert-heading mb-1"><i class="bi bi-moon-stars"></i> Fora do horário de atendimento</h6>
+                    Novos chamados podem ser abertos das <b th:text="${@horarioFuncionamentoService.inicio}">07:00</b>
+                    às <b th:text="${@horarioFuncionamentoService.fim}">20:00</b>.
+                    Agora são <b th:text="${@horarioFuncionamentoService.agoraFormatado}"></b>.
+                    Enquanto isso, consulte a base de conhecimento ao lado.
+                </div>
+                <form th:action="@{/chamados}" th:object="${form}" method="post">
+                <fieldset th:disabled="${!@horarioFuncionamentoService.aberto}">
+                    <div class="mb-3">
+                        <label class="form-label">Título *</label>
+                        <input th:field="*{titulo}" class="form-control" th:classappend="${#fields.hasErrors('titulo')} ? 'is-invalid'" maxlength="150">
+                        <div class="invalid-feedback" th:errors="*{titulo}"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição detalhada *</label>
+                        <textarea th:field="*{descricao}" rows="5" class="form-control" th:classappend="${#fields.hasErrors('descricao')} ? 'is-invalid'"
+                                  placeholder="O que aconteceu? Desde quando? Quantos usuários/clientes são afetados? Mensagem de erro?"></textarea>
+                        <div class="invalid-feedback" th:errors="*{descricao}"></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo *</label>
+                            <select th:field="*{tipo}" class="form-select" th:classappend="${#fields.hasErrors('tipo')} ? 'is-invalid'">
+                                <option value="">Selecione...</option>
+                                <option th:each="t : ${tipos}" th:value="${t}" th:text="${t.descricao}"></option>
+                            </select>
+                            <div class="invalid-feedback" th:errors="*{tipo}"></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Categoria *</label>
+                            <select th:field="*{categoriaId}" class="form-select" th:classappend="${#fields.hasErrors('categoriaId')} ? 'is-invalid'">
+                                <option value="">Selecione...</option>
+                                <option th:each="cat : ${categorias}" th:value="${cat.id}" th:text="${cat.nome}"></option>
+                            </select>
+                            <div class="invalid-feedback" th:errors="*{categoriaId}"></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Impacto * <small class="text-muted">(quantos são afetados)</small></label>
+                            <select th:field="*{impacto}" class="form-select" th:classappend="${#fields.hasErrors('impacto')} ? 'is-invalid'">
+                                <option value="">Selecione...</option>
+                                <option th:each="i : ${impactos}" th:value="${i}" th:text="${i.descricao}"></option>
+                            </select>
+                            <div class="invalid-feedback" th:errors="*{impacto}"></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Urgência * <small class="text-muted">(quão rápido precisa)</small></label>
+                            <select th:field="*{urgencia}" class="form-select" th:classappend="${#fields.hasErrors('urgencia')} ? 'is-invalid'">
+                                <option value="">Selecione...</option>
+                                <option th:each="u : ${urgencias}" th:value="${u}" th:text="${u.descricao}"></option>
+                            </select>
+                            <div class="invalid-feedback" th:errors="*{urgencia}"></div>
+                        </div>
+                    </div>
+                    <!-- Prévia do cálculo (atualiza ao escolher tipo, impacto e urgência) -->
+                    <div id="previaCalculo" class="alert alert-light border mb-3">
+                        <div class="fw-semibold mb-1"><i class="bi bi-calculator"></i> Resultado do cálculo</div>
+                        <div id="previaVazia" class="small text-muted">Selecione o tipo, o impacto e a urgência para ver para qual nível o chamado vai.</div>
+                        <div id="previaResultado" class="d-none">
+                            <div class="d-flex flex-wrap gap-3 align-items-center">
+                                <div><span class="small text-muted">Pontos</span><br><b class="fs-5" id="pvPontos"></b></div>
+                                <div><span class="small text-muted">Prioridade</span><br><span class="badge fs-6" id="pvPrioridade"></span></div>
+                                <div><span class="small text-muted">Prazo (SLA)</span><br><b id="pvSla"></b></div>
+                                <div><span class="small text-muted">Nível responsável</span><br><span class="badge fs-6 text-bg-dark" id="pvNivel"></span></div>
+                            </div>
+                            <div class="small mt-2"><b>Por quê:</b> <span id="pvMotivo"></span></div>
+                            <div class="small text-muted"><b>Quem atende:</b> <span id="pvTecnicos"></span></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary">Abrir chamado</button>
+                    <a th:href="@{/chamados/meus}" class="btn btn-link">Cancelar</a>
+                </fieldset>
+                </form>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card p-3 mb-3">
+                <h6>Matriz de prioridade (Impacto x Urgência)</h6>
+                <table class="table table-sm table-bordered text-center small mb-1">
+                    <thead><tr><th>Imp. \ Urg.</th><th th:each="u : ${urgencias}" th:text="${u.descricao}"></th></tr></thead>
+                    <tbody>
+                    <tr th:each="i : ${impactos}">
+                        <th th:text="${i.descricao}"></th>
+                        <td th:each="u : ${urgencias}" th:with="p=${@prioridadeService.calcular(i, u)}">
+                            <span class="badge" th:classappend="'text-bg-' + ${p.cor}" th:text="${p.descricao}"></span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+                <div class="small text-muted">SLA: Crítica 2h · Alta 8h · Média 24h · Baixa 48h</div>
+            </div>
+            <div class="card p-3 mb-3">
+                <h6>Cálculo do nível responsável</h6>
+                <div class="small mb-2"><b>Pontos</b> = Impacto + Urgência (Baixo 1 · Médio 2 · Alto 3 · Crítico 4)</div>
+                <table class="table table-sm table-bordered small mb-2">
+                    <tbody>
+                    <tr><td>Solicitação de Melhoria</td><td><b>N3</b> (sempre)</td></tr>
+                    <tr><td>Dúvida / Solicitação de Serviço</td><td><b>N1</b> (sempre)</td></tr>
+                    <tr><td>Incidente / Bug: até <span th:text="${enc.pontosN2 - 1}">6</span> pontos</td><td><b>N1</b></td></tr>
+                    <tr><td>Incidente / Bug: <span th:text="${enc.pontosN2}">7</span><span th:if="${enc.pontosN3 <= 8}" th:text="' a ' + ${enc.pontosN3 - 1}"></span><span th:unless="${enc.pontosN3 <= 8}"> ou mais</span> pontos</td><td><b>N2</b></td></tr>
+                    <tr th:if="${enc.pontosN3 <= 8}"><td>Incidente / Bug: <span th:text="${enc.pontosN3}">8</span> ou mais pontos</td><td><b>N3</b></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card p-3">
+                <h6><i class="bi bi-lightbulb"></i> Antes de abrir, veja se a solução já existe:</h6>
+                <ul class="small mb-0">
+                    <li th:each="a : ${artigos}"><a th:href="@{/kb/{id}(id=${a.id})}" th:text="${a.titulo}" target="_blank"></a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+<script th:inline="javascript">
+    (function () {
+        const simulacao = /*[[${simulacao}]]*/ {};
+        const tecnicos = /*[[${tecnicosPorNivel}]]*/ {};
+        const campos = ['tipo', 'impacto', 'urgencia'].map(id => document.getElementById(id));
+        function atualizar() {
+            const [tipo, impacto, urgencia] = campos.map(c => c.value);
+            const r = (tipo && impacto && urgencia) ? simulacao[tipo + '|' + impacto + '|' + urgencia] : null;
+            document.getElementById('previaVazia').classList.toggle('d-none', !!r);
+            document.getElementById('previaResultado').classList.toggle('d-none', !r);
+            if (!r) return;
+            document.getElementById('pvPontos').textContent = r.pontos;
+            const p = document.getElementById('pvPrioridade');
+            p.textContent = r.prioridade;
+            p.className = 'badge fs-6 text-bg-' + r.cor;
+            document.getElementById('pvSla').textContent = r.sla + 'h';
+            document.getElementById('pvNivel').textContent = r.nivel;
+            document.getElementById('pvMotivo').textContent = r.motivo;
+            document.getElementById('pvTecnicos').textContent = tecnicos[r.nivel] || '—';
+        }
+        campos.forEach(c => c.addEventListener('change', atualizar));
+        atualizar(); // caso o formulário volte com valores (erro de validação)
+    })();
+</script>
+</body>
+</html>

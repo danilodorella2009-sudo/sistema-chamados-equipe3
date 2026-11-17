@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Entrar')}"></head>
+<body>
+<div class="container" style="max-width: 900px">
+    <div class="row mt-5 g-4">
+        <div class="col-md-5">
+            <div class="card p-4">
+                <h4 class="mb-3"><i class="bi bi-headset"></i> Central de Chamados</h4>
+                <div th:if="${param.error}" class="alert alert-danger py-2">E-mail ou senha inválidos.</div>
+                <div th:if="${param.logout}" class="alert alert-info py-2">Você saiu do sistema.</div>
+                <div th:if="${param.expirado}" class="alert alert-warning py-2">
+                    <i class="bi bi-clock-history"></i> Você saiu da conta automaticamente por inatividade.</div>
+                <form th:action="@{/login}" method="post">
+                    <div class="mb-3">
+                        <label class="form-label">E-mail</label>
+                        <input type="email" name="email" class="form-control" required autofocus>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Senha</label>
+                        <input type="password" name="senha" class="form-control" required>
+                    </div>
+                    <button class="btn btn-primary w-100">Entrar</button>
+                </form>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card p-4 small">
+                <h6>Usuários de demonstração (senha <code>123456</code>)</h6>
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>E-mail</th><th>Perfil</th></tr></thead>
+                    <tbody>
+                    <tr><td>supervisor@softhouse.com</td><td>Supervisor</td></tr>
+                    <tr><td>ana.n1@softhouse.com / bruno.n1@softhouse.com</td><td>Técnico N1</td></tr>
+                    <tr><td>carla.n2@softhouse.com / gustavo.n2@softhouse.com</td><td>Técnico N2</td></tr>
+                    <tr><td>daniel.n3@softhouse.com / eduardo.n3@softhouse.com</td><td>Técnico N3</td></tr>
+                    <tr><td>joao@alfavarejo.com.br, pedro@betalogistica.com.br, patricia@gamasaude.com.br ...</td><td>Solicitante</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
